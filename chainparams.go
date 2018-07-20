@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/lightningnetwork/lnd/keychain"
+	"github.com/matijamitic/lnd/keychain"
 	litecoinCfg "github.com/ltcsuite/ltcd/chaincfg"
 	einsteiniumCfg "github.com/MatijaMitic/emc2d-chainconfig"
 	litecoinWire "github.com/ltcsuite/ltcd/wire"
@@ -34,7 +34,7 @@ type litecoinNetParams struct {
 // einsteiniumNetParams couples the p2p parameters of a network with the
 // corresponding RPC port of a daemon running on the particular network.
 type einsteiniumNetParams struct {
-	*litecoinCfg.Params //TODO cnahge to to einsteiniumCfg in ltcd/chaincfg
+	*einsteiniumCfg.Params //TODO cnahge to to einsteiniumCfg in ltcd/chaincfg
 	rpcPort  string
 	CoinType uint32
 }
