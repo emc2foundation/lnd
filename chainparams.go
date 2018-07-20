@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/lightningnetwork/lnd/keychain"
 	litecoinCfg "github.com/ltcsuite/ltcd/chaincfg"
+	einsteiniumCfg "github.com/MatijaMitic/emc2d-chainconfig"
 	litecoinWire "github.com/ltcsuite/ltcd/wire"
 	"github.com/btcsuite/btcd/chaincfg"
 	bitcoinCfg "github.com/btcsuite/btcd/chaincfg"
@@ -26,6 +27,14 @@ type bitcoinNetParams struct {
 // corresponding RPC port of a daemon running on the particular network.
 type litecoinNetParams struct {
 	*litecoinCfg.Params
+	rpcPort  string
+	CoinType uint32
+}
+
+// einsteiniumNetParams couples the p2p parameters of a network with the
+// corresponding RPC port of a daemon running on the particular network.
+type einsteiniumNetParams struct {
+	*litecoinCfg.Params //TODO cnahge to to einsteiniumCfg in ltcd/chaincfg
 	rpcPort  string
 	CoinType uint32
 }
@@ -68,6 +77,38 @@ var litecoinMainNetParams = litecoinNetParams{
 	Params:   &litecoinCfg.MainNetParams,
 	rpcPort:  "9334",
 	CoinType: keychain.CoinTypeLitecoin,
+}
+
+// litecoinRegtestParams contains the parameters specific to the current
+// Litecoin regtest.
+var litecoinRegtestParams = litecoinNetParams{
+	Params:   &litecoinCfg.RegressionNetParams,
+	rpcPort:  "19334",
+	CoinType: keychain.CoinTypeLitecoin,
+}
+
+// einsteiniumTestNetParams contains parameters specific to the 4th version of the
+// Einsteinium test network.
+var einsteiniumTestNetParams = einsteiniumNetParams{
+	Params:   &einsteiniumCfg.TestNet4Params,
+	rpcPort:  "31876",
+	CoinType: keychain.CoinTypeTestnet,
+}
+
+// einsteiniumMainNetParams contains the parameters specific to the current
+// Einsteinium mainnet.
+var einsteiniumMainNetParams = einsteiniumNetParams{
+	Params:   &einsteiniumCfg.MainNetParams,
+	rpcPort:  "41876",
+	CoinType: keychain.CointTypeEinsteinium,
+}
+
+// einsteiniumRegtestParams contains the parameters specific to the current
+// Einsteinium regtest.
+var einsteiniumRegtestParams = einsteiniumNetParams{
+	Params:   &einsteiniumCfg.RegressionNetParams,
+	rpcPort:  "31882",
+	CoinType: keychain.CointTypeEinsteinium,
 }
 
 // regTestNetParams contains parameters specific to a local regtest network.
@@ -116,6 +157,47 @@ func applyLitecoinParams(params *bitcoinNetParams, litecoinParams *litecoinNetPa
 
 	params.rpcPort = litecoinParams.rpcPort
 	params.CoinType = litecoinParams.CoinType
+}
+
+// applyEinsteiniumParams applies the relevant chain configuration parameters that
+// differ for einsteinium to the chain parameters typed for btcsuite derivation.
+// This function is used in place of using something like interface{} to
+// abstract over _which_ chain (or fork) the parameters are for.
+func applyEinsteiniumParams(params *bitcoinNetParams, einsteiniumParams *einsteiniumNetParams) {
+	params.Name = einsteiniumParams.Name
+	params.Net = bitcoinWire.BitcoinNet(einsteiniumParams.Net)
+	params.DefaultPort = einsteiniumParams.DefaultPort
+	params.CoinbaseMaturity = einsteiniumParams.CoinbaseMaturity
+
+	copy(params.GenesisHash[:], einsteiniumParams.GenesisHash[:])
+
+	// Address encoding magics
+	params.PubKeyHashAddrID = einsteiniumParams.PubKeyHashAddrID
+	params.ScriptHashAddrID = einsteiniumParams.ScriptHashAddrID
+	params.PrivateKeyID = einsteiniumParams.PrivateKeyID
+	params.WitnessPubKeyHashAddrID = einsteiniumParams.WitnessPubKeyHashAddrID
+	params.WitnessScriptHashAddrID = einsteiniumParams.WitnessScriptHashAddrID
+	params.Bech32HRPSegwit = einsteiniumParams.Bech32HRPSegwit
+
+	copy(params.HDPrivateKeyID[:], einsteiniumParams.HDPrivateKeyID[:])
+	copy(params.HDPublicKeyID[:], einsteiniumParams.HDPublicKeyID[:])
+
+	params.HDCoinType = einsteiniumParams.HDCoinType
+
+	checkPoints := make([]chaincfg.Checkpoint, len(einsteiniumParams.Checkpoints))
+	for i := 0; i < len(einsteiniumParams.Checkpoints); i++ {
+		var chainHash chainhash.Hash
+		copy(chainHash[:], einsteiniumParams.Checkpoints[i].Hash[:])
+
+		checkPoints[i] = chaincfg.Checkpoint{
+			Height: einsteiniumParams.Checkpoints[i].Height,
+			Hash:   &chainHash,
+		}
+	}
+	params.Checkpoints = checkPoints
+
+	params.rpcPort = einsteiniumParams.rpcPort
+	params.CoinType = einsteiniumParams.CoinType
 }
 
 // isTestnet tests if the given params correspond to a testnet

@@ -32,6 +32,12 @@
   revision = "29b680b06c82d044ebea91bf3069038eb562df2a"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/MatijaMitic/emc2d-chainconfig"
+  packages = ["."]
+  revision = "ecb978e911e5be957f9a275e01291219f7dfdd3d"
+
+[[projects]]
   name = "github.com/Yawning/aez"
   packages = ["."]
   revision = "4dad034d9db2caec23fb8f69b9160ae16f8d46a3"

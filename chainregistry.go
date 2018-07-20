@@ -46,9 +46,20 @@ const (
 	defaultLitecoinStaticFeeRate = lnwallet.SatPerVByte(200)
 	defaultLitecoinDustLimit     = btcutil.Amount(54600)
 
+	defaultEinsteiniumMinHTLCMSat   = lnwire.MilliSatoshi(1000)
+	defaultEinsteiniumBaseFeeMSat   = lnwire.MilliSatoshi(1000)
+	defaultEinsteiniumFeeRate       = lnwire.MilliSatoshi(1)
+	defaultEinsteiniumTimeLockDelta = 576
+	defaultEinsteiniumStaticFeeRate = lnwallet.SatPerVByte(200)
+	defaultEinsteiniumDustLimit     = btcutil.Amount(54600)
+
 	// btcToLtcConversionRate is a fixed ratio used in order to scale up
 	// payments when running on the Litecoin chain.
 	btcToLtcConversionRate = 60
+
+	// btcToEmc2ConversionRate is a fixed ratio used in order to scale up
+	// payments when running on the Einsteinium chain.
+	btcToEmc2ConversionRate = 20000
 )
 
 // defaultBtcChannelConstraints is the default set of channel constraints that are
@@ -67,6 +78,13 @@ var defaultLtcChannelConstraints = channeldb.ChannelConstraints{
 	MaxAcceptedHtlcs: lnwallet.MaxHTLCNumber / 2,
 }
 
+// defaultEmc2ChannelConstraints is the default set of channel constraints that are
+// meant to be used when initially funding a Einsteinium channel.
+var defaultEmc2ChannelConstraints = channeldb.ChannelConstraints{
+	DustLimit:        defaultEinsteiniumDustLimit,
+	MaxAcceptedHtlcs: lnwallet.MaxHTLCNumber / 2,
+}
+
 // chainCode is an enum-like structure for keeping track of the chains
 // currently supported within lnd.
 type chainCode uint32
@@ -77,6 +95,9 @@ const (
 
 	// litecoinChain is Litecoin's testnet chain.
 	litecoinChain
+
+	// einsteiniumChain is Einsteinium's testnet chain.
+	einsteiniumChain
 )
 
 // String returns a string representation of the target chainCode.
@@ -86,6 +107,8 @@ func (c chainCode) String() string {
 		return "bitcoin"
 	case litecoinChain:
 		return "litecoin"
+	case einsteiniumChain:
+		return "einsteinium"
 	default:
 		return "kekcoin"
 	}
@@ -127,6 +150,9 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 	if registeredChains.PrimaryChain() == litecoinChain {
 		homeChainConfig = cfg.Litecoin
 	}
+	if registeredChains.PrimaryChain() == einsteiniumChain {
+		homeChainConfig = cfg.Einsteinium
+	}
 	ltndLog.Infof("Primary chain is set to: %v",
 		registeredChains.PrimaryChain())
 
@@ -152,6 +178,16 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 		}
 		cc.feeEstimator = lnwallet.StaticFeeEstimator{
 			FeeRate: defaultLitecoinStaticFeeRate,
+		}
+	case einsteiniumChain:
+		cc.routingPolicy = htlcswitch.ForwardingPolicy{
+			MinHTLC:       cfg.Einsteinium.MinHTLC,
+			BaseFee:       cfg.Einsteinium.BaseFee,
+			FeeRate:       cfg.Einsteinium.FeeRate,
+			TimeLockDelta: cfg.Einsteinium.TimeLockDelta,
+		}
+		cc.feeEstimator = lnwallet.StaticFeeEstimator{
+			FeeRate: defaultEinsteiniumStaticFeeRate,
 		}
 	default:
 		return nil, nil, fmt.Errorf("Default routing policy for "+
@@ -259,13 +295,15 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			svc.Stop()
 			nodeDatabase.Close()
 		}
-	case "bitcoind", "litecoind":
+	case "bitcoind", "litecoind", "einsteiniumd":
 		var bitcoindMode *bitcoindConfig
 		switch {
 		case cfg.Bitcoin.Active:
 			bitcoindMode = cfg.BitcoindMode
 		case cfg.Litecoin.Active:
 			bitcoindMode = cfg.LitecoindMode
+		case cfg.Einsteinium.Active:
+			bitcoindMode = cfg.EinsteiniumdMode
 		}
 		// Otherwise, we'll be speaking directly via RPC and ZMQ to a
 		// bitcoind node. If the specified host for the btcd/ltcd RPC
@@ -375,8 +413,25 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			if err := cc.feeEstimator.Start(); err != nil {
 				return nil, nil, err
 			}
+		} else if cfg.Einsteinium.Active {
+			ltndLog.Infof("Initializing einsteiniumd backed fee estimator")
+
+			// Finally, we'll re-initialize the fee estimator, as
+			// if we're using einsteiniumd as a backend, then we can
+			// use live fee estimates, rather than a statically
+			// coded value.
+			fallBackFeeRate := lnwallet.SatPerVByte(25)
+			cc.feeEstimator, err = lnwallet.NewBitcoindFeeEstimator(
+				*rpcConfig, fallBackFeeRate,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := cc.feeEstimator.Start(); err != nil {
+				return nil, nil, err
+			}
 		}
-	case "btcd", "ltcd":
+	case "btcd", "ltcd", "emc2d":
 		// Otherwise, we'll be speaking directly via RPC to a node.
 		//
 		// So first we'll load btcd/ltcd's TLS cert for the RPC
@@ -389,6 +444,8 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 			btcdMode = cfg.BtcdMode
 		case cfg.Litecoin.Active:
 			btcdMode = cfg.LtcdMode
+		case cfg.Einsteinium.Active:
+			btcdMode = cfg.Emc2dMode
 		}
 		var rpcCert []byte
 		if btcdMode.RawRPCCert != "" {
@@ -460,7 +517,7 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 		// If we're not in simnet or regtest mode, then we'll attempt
 		// to use a proper fee estimator for testnet.
 		if !cfg.Bitcoin.SimNet && !cfg.Litecoin.SimNet &&
-			!cfg.Bitcoin.RegTest && !cfg.Litecoin.RegTest {
+			!cfg.Bitcoin.RegTest && !cfg.Litecoin.RegTest && !cfg.Einsteinium.RegTest {
 
 			ltndLog.Infof("Initializing btcd backed fee estimator")
 
@@ -498,6 +555,9 @@ func newChainControlFromConfig(cfg *config, chanDB *channeldb.DB,
 	channelConstraints := defaultBtcChannelConstraints
 	if registeredChains.PrimaryChain() == litecoinChain {
 		channelConstraints = defaultLtcChannelConstraints
+	}
+	if registeredChains.PrimaryChain() == einsteiniumChain {
+		channelConstraints = defaultEmc2ChannelConstraints
 	}
 
 	keyRing := keychain.NewBtcWalletKeyRing(
@@ -569,14 +629,33 @@ var (
 		0x59, 0x40, 0xfd, 0x1f, 0xe3, 0x65, 0xa7, 0x12,
 	})
 
+	// einsteiniumTestnetGenesis is the genesis hash of Einsteinium's testnet4
+	// chain.
+	einsteiniumTestnetGenesis = chainhash.Hash([chainhash.HashSize]byte{
+		0xee, 0x6b, 0x40, 0x9e, 0x82, 0x15, 0x46, 0x57,
+		0xbe, 0xaf, 0xb4, 0xf2, 0x55, 0x7a, 0x9a, 0x1e, 
+		0x74, 0x54, 0xd4, 0x76, 0x3a, 0x18, 0xe7, 0xc3, 
+		0x92, 0x00, 0xe6, 0xb5, 0x88, 0x18, 0x27, 0xa4,
+	})
+
+	// einsteiniumMainnetGenesis is the genesis hash of Einsteinium's main chain.
+	einsteiniumMainnetGenesis = chainhash.Hash([chainhash.HashSize]byte{
+		0x4b, 0xd9, 0xae, 0x11, 0x46, 0x71, 0x8f, 0x86,
+		0x42, 0x7b, 0xeb, 0x97, 0x5b, 0x3b, 0x30, 0x84,
+		0xf9, 0x03, 0x5f, 0x84, 0x1c, 0xff, 0x60, 0xf8,
+		0x06, 0xac, 0xb8, 0xb7, 0x4b, 0x20, 0x56, 0x4e,
+	})
+
 	// chainMap is a simple index that maps a chain's genesis hash to the
 	// chainCode enum for that chain.
 	chainMap = map[chainhash.Hash]chainCode{
 		bitcoinTestnetGenesis:  bitcoinChain,
 		litecoinTestnetGenesis: litecoinChain,
+		einsteiniumTestnetGenesis: einsteiniumChain,
 
 		bitcoinMainnetGenesis:  bitcoinChain,
 		litecoinMainnetGenesis: litecoinChain,
+		einsteiniumMainnetGenesis: einsteiniumChain,
 	}
 
 	// chainDNSSeeds is a map of a chain's hash to the set of DNS seeds

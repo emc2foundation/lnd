@@ -87,8 +87,12 @@ var (
 	defaultLtcdDir         = btcutil.AppDataDir("ltcd", false)
 	defaultLtcdRPCCertFile = filepath.Join(defaultLtcdDir, "rpc.cert")
 
+	defaultEmc2dDir         = btcutil.AppDataDir("emc2d", false)
+	defaultEmc2dRPCCertFile = filepath.Join(defaultEmc2dDir, "rpc.cert")
+
 	defaultBitcoindDir  = btcutil.AppDataDir("bitcoin", false)
 	defaultLitecoindDir = btcutil.AppDataDir("litecoin", false)
+	defaultEinsteiniumdDir = btcutil.AppDataDir("einsteinium", false)
 
 	defaultTorSOCKS            = net.JoinHostPort("localhost", strconv.Itoa(defaultTorSOCKSPort))
 	defaultTorDNS              = net.JoinHostPort(defaultTorDNSHost, strconv.Itoa(defaultTorDNSPort))
@@ -100,7 +104,7 @@ type chainConfig struct {
 	Active   bool   `long:"active" description:"If the chain should be active or not."`
 	ChainDir string `long:"chaindir" description:"The directory to store the chain's data within."`
 
-	Node string `long:"node" description:"The blockchain interface to use." choice:"btcd" choice:"bitcoind" choice:"neutrino" choice:"ltcd" choice:"litecoind"`
+	Node string `long:"node" description:"The blockchain interface to use." choice:"btcd" choice:"bitcoind" choice:"neutrino" choice:"ltcd" choice:"litecoind" choice:"emc2d" choice:"einsteiniumd"`
 
 	MainNet  bool `long:"mainnet" description:"Use the main network"`
 	TestNet3 bool `long:"testnet" description:"Use the test network"`
@@ -216,6 +220,10 @@ type config struct {
 	LtcdMode      *btcdConfig     `group:"ltcd" namespace:"ltcd"`
 	LitecoindMode *bitcoindConfig `group:"litecoind" namespace:"litecoind"`
 
+	Einsteinium	  *chainConfig	  `group:"Einsteinium" namespace:"einsteinium"`
+	Emc2dMode      *btcdConfig     `group:"emc2d" namespace:"emc2d"`
+	EinsteiniumdMode *bitcoindConfig `group:"einsteiniumd" namespace:"einsteiniumd"`
+
 	Autopilot *autoPilotConfig `group:"Autopilot" namespace:"autopilot"`
 
 	Tor *torConfig `group:"Tor" namespace:"tor"`
@@ -289,6 +297,22 @@ func loadConfig() (*config, error) {
 		},
 		LitecoindMode: &bitcoindConfig{
 			Dir:     defaultLitecoindDir,
+			RPCHost: defaultRPCHost,
+		},
+		Einsteinium: &chainConfig{
+			MinHTLC:       defaultEinsteiniumMinHTLCMSat,
+			BaseFee:       defaultEinsteiniumBaseFeeMSat,
+			FeeRate:       defaultEinsteiniumFeeRate,
+			TimeLockDelta: defaultEinsteiniumTimeLockDelta,
+			Node:          "emc2d",
+		},
+		Emc2dMode: &btcdConfig{
+			Dir:     defaultEmc2dDir,
+			RPCHost: defaultRPCHost,
+			RPCCert: defaultEmc2dRPCCertFile,
+		},
+		EinsteiniumdMode: &bitcoindConfig{
+			Dir:     defaultEinsteiniumdDir,
 			RPCHost: defaultRPCHost,
 		},
 		MaxPendingChannels: defaultMaxPendingChannels,
@@ -394,8 +418,10 @@ func loadConfig() (*config, error) {
 	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
 	cfg.BtcdMode.Dir = cleanAndExpandPath(cfg.BtcdMode.Dir)
 	cfg.LtcdMode.Dir = cleanAndExpandPath(cfg.LtcdMode.Dir)
+	cfg.Emc2dMode.Dir = cleanAndExpandPath(cfg.Emc2dMode.Dir)
 	cfg.BitcoindMode.Dir = cleanAndExpandPath(cfg.BitcoindMode.Dir)
 	cfg.LitecoindMode.Dir = cleanAndExpandPath(cfg.LitecoindMode.Dir)
+	cfg.EinsteiniumdMode.Dir = cleanAndExpandPath(cfg.EinsteiniumdMode.Dir)
 	cfg.Tor.V2PrivateKeyPath = cleanAndExpandPath(cfg.Tor.V2PrivateKeyPath)
 
 	// Ensure that the user didn't attempt to specify negative values for
@@ -507,21 +533,106 @@ func loadConfig() (*config, error) {
 			"active together"
 		return nil, fmt.Errorf(str, funcName)
 
-	// Either Bitcoin must be active, or Litecoin must be active.
-	// Otherwise, we don't know which chain we're on.
-	case !cfg.Bitcoin.Active && !cfg.Litecoin.Active:
+	// Either Bitcoin must be active, or Litecoin, or Einsteinium must be active.
+	case !cfg.Bitcoin.Active && !cfg.Litecoin.Active && !cfg.Einsteinium.Active:
 		return nil, fmt.Errorf("%s: either bitcoin.active or "+
-			"litecoin.active must be set to 1 (true)", funcName)
+			"litecoin.active or einsteinium.active must be set to 1 (true)", funcName)
+
+	case cfg.Einsteinium.Active:
+		// Multiple networks can't be selected simultaneously.  Count
+		// number of network flags passed; assign active network params
+		// while we're at it.
+		numNets := 0
+		var emc2Params einsteiniumNetParams
+		if cfg.Einsteinium.MainNet {
+			numNets++
+			emc2Params = einsteiniumMainNetParams
+		}
+		if cfg.Einsteinium.TestNet3 {
+			fmt.Println("Einsteinium TestNet4")
+			numNets++
+			emc2Params = einsteiniumTestNetParams
+		}
+		if cfg.Einsteinium.RegTest {
+			numNets++
+			emc2Params = einsteiniumRegtestParams
+			/*str := "%s: regnet mode for einsteinium not currently supported"
+			return nil, fmt.Errorf(str, funcName)*/
+		}
+		if numNets > 1 {
+			str := "%s: The mainnet, testnet, and simnet params " +
+				"can't be used together -- choose one of the " +
+				"three"
+			err := fmt.Errorf(str, funcName)
+			return nil, err
+		}
+
+		// The target network must be provided, otherwise, we won't
+		// know how to initialize the daemon.
+		if numNets == 0 {
+			str := "%s: either --einsteinium.mainnet, or " +
+				"einsteinium.testnet must be specified"
+			err := fmt.Errorf(str, funcName)
+			return nil, err
+		}
+
+		// The einsteinium chain is the current active chain. However
+		// throughout the codebase we required chaincfg.Params. So as a
+		// temporary hack, we'll mutate the default net params for
+		// bitcoin with the einsteinium specific information.
+		fmt.Println("applyEinsteiniumParams net")
+		fmt.Println(emc2Params.Net)
+		fmt.Println("applyEinsteiniumParams genesis")
+		fmt.Println(emc2Params.GenesisHash[:])
+
+		applyEinsteiniumParams(&activeNetParams, &emc2Params)
+
+		switch cfg.Einsteinium.Node {
+		case "emc2d":
+			err := parseRPCParams(cfg.Einsteinium, cfg.Emc2dMode,
+				einsteiniumChain, funcName)
+			if err != nil {
+				err := fmt.Errorf("unable to load RPC "+
+					"credentials for ltcd: %v", err)
+				return nil, err
+			}
+		case "einsteiniumd":
+			if cfg.Einsteinium.SimNet {
+				return nil, fmt.Errorf("%s: litecoind does not "+
+					"support simnet", funcName)
+			}
+			err := parseRPCParams(cfg.Einsteinium, cfg.EinsteiniumdMode,
+				einsteiniumChain, funcName)
+			if err != nil {
+				err := fmt.Errorf("unable to load RPC "+
+					"credentials for einsteiniumd: %v", err)
+				return nil, err
+			}
+		default:
+			str := "%s: only emc2d and einsteiniumd mode supported for " +
+				"einsteinium at this time"
+			return nil, fmt.Errorf(str, funcName)
+		}
+
+		cfg.Einsteinium.ChainDir = filepath.Join(cfg.DataDir,
+			defaultChainSubDirname,
+			einsteiniumChain.String())
+
+		// Finally we'll register the litecoin chain as our current
+		// primary chain.
+		registeredChains.RegisterPrimaryChain(einsteiniumChain)
+		maxFundingAmount = maxEmc2FundingAmount
+		maxPaymentMSat = maxEmc2PaymentMSat
 
 	case cfg.Litecoin.Active:
 		if cfg.Litecoin.SimNet {
 			str := "%s: simnet mode for litecoin not currently supported"
 			return nil, fmt.Errorf(str, funcName)
 		}
-		if cfg.Litecoin.RegTest {
+		/*if cfg.Litecoin.RegTest {
 			str := "%s: regnet mode for litecoin not currently supported"
 			return nil, fmt.Errorf(str, funcName)
-		}
+		}*/
 
 		if cfg.Litecoin.TimeLockDelta < minTimeLockDelta {
 			return nil, fmt.Errorf("timelockdelta must be at least %v",
@@ -540,6 +651,12 @@ func loadConfig() (*config, error) {
 		if cfg.Litecoin.TestNet3 {
 			numNets++
 			ltcParams = litecoinTestNetParams
+		}
+		if cfg.Litecoin.RegTest {
+			numNets++
+			ltcParams = litecoinRegtestParams
+			/*str := "%s: regnet mode for litecoin not currently supported"
+			return nil, fmt.Errorf(str, funcName)*/
 		}
 		if numNets > 1 {
 			str := "%s: The mainnet, testnet, and simnet params " +
@@ -1059,6 +1176,8 @@ func parseRPCParams(cConfig *chainConfig, nodeConfig interface{}, net chainCode,
 			daemonName = "btcd"
 		case litecoinChain:
 			daemonName = "ltcd"
+		case einsteiniumChain:
+			daemonName = "emc2d"
 		}
 
 		// If only ONE of RPCUser or RPCPass is set, we assume the
@@ -1075,6 +1194,9 @@ func parseRPCParams(cConfig *chainConfig, nodeConfig interface{}, net chainCode,
 		case litecoinChain:
 			confDir = conf.Dir
 			confFile = "ltcd"
+		case einsteiniumChain:
+			confDir = conf.Dir
+			confFile = "emc2d"
 		}
 	case *bitcoindConfig:
 		// If all of RPCUser, RPCPass, and ZMQPath are set, we assume
@@ -1089,6 +1211,8 @@ func parseRPCParams(cConfig *chainConfig, nodeConfig interface{}, net chainCode,
 			daemonName = "bitcoind"
 		case litecoinChain:
 			daemonName = "litecoind"
+		case einsteiniumChain:
+			daemonName = "einsteiniumd"
 		}
 		// If only one or two of the parameters are set, we assume the
 		// user did that unintentionally.

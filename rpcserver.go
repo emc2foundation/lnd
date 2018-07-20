@@ -48,6 +48,11 @@ const (
 	// permitted.
 	maxLtcPaymentMSat = lnwire.MilliSatoshi(math.MaxUint32) *
 		btcToLtcConversionRate
+
+	// maxEmc2PaymentMSat is the maximum allowed Einsteinium payment currently
+	// permitted.
+	maxEmc2PaymentMSat = lnwire.MilliSatoshi(math.MaxUint32) *
+		btcToEmc2ConversionRate
 )
 
 var (
@@ -2531,6 +2536,9 @@ func (r *rpcServer) AddInvoice(ctx context.Context,
 		defaultDelta := cfg.Bitcoin.TimeLockDelta
 		if registeredChains.PrimaryChain() == litecoinChain {
 			defaultDelta = cfg.Litecoin.TimeLockDelta
+		}
+		if registeredChains.PrimaryChain() == einsteiniumChain {
+			defaultDelta = cfg.Einsteinium.TimeLockDelta
 		}
 		options = append(options, zpay32.CLTVExpiry(uint64(defaultDelta)))
 	}

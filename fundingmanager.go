@@ -47,6 +47,13 @@ const (
 	minLtcRemoteDelay uint16 = 576
 	maxLtcRemoteDelay uint16 = 8064
 
+	// minEmc2RemoteDelay and maxEmc2RemoteDelay is the extremes of the
+	// Einsteinium CSV delay we will require the remote to use for its
+	// commitment transaction. The actual delay we will require will be
+	// somewhere between these values, depending on channel size.
+	minEmc2RemoteDelay uint16 = 576
+	maxEmc2RemoteDelay uint16 = 8064
+
 	// maxWaitNumBlocksFundingConf is the maximum number of blocks to wait
 	// for the funding transaction to be confirmed before forgetting about
 	// the channel. 288 blocks is ~48 hrs
@@ -67,6 +74,11 @@ const (
 	// currently accepted on the Litecoin chain within the Lightning
 	// Protocol.
 	maxLtcFundingAmount = maxBtcFundingAmount * btcToLtcConversionRate
+
+	// maxEmc2FundingAmount is a soft-limit of the maximum channel size
+	// currently accepted on the Einsteinium chain within the Lightning
+	// Protocol.
+	maxEmc2FundingAmount = maxBtcFundingAmount * btcToEmc2ConversionRate
 
 	// minCommitFeePerKw is the smallest fee rate that we should propose
 	// for a new fee update. We'll use this as a fee floor when proposing

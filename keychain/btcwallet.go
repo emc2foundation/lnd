@@ -22,6 +22,10 @@ const (
 	// CoinTypeLitecoin specifies the BIP44 coin type for Litecoin key
 	// derivation.
 	CoinTypeLitecoin = 2
+
+	// CointTypeEinsteinium specifies the BIP44 coin type for Einsteinium key
+	// derivation.
+	CointTypeEinsteinium = 41
 )
 
 var (

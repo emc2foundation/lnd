@@ -299,6 +299,11 @@ func lndMain() error {
 		minRemoteDelay = minLtcRemoteDelay
 		maxRemoteDelay = maxLtcRemoteDelay
 	}
+	if primaryChain == einsteiniumChain {
+		chainCfg = cfg.Einsteinium
+		minRemoteDelay = minEmc2RemoteDelay
+		maxRemoteDelay = maxEmc2RemoteDelay
+	}
 
 	// TODO(roasbeef): add rotation
 	idPrivKey, err := activeChainControl.wallet.DerivePrivKey(keychain.KeyDescriptor{
@@ -894,6 +899,9 @@ func waitForWalletPassword(grpcEndpoints, restEndpoints []net.Addr,
 	chainConfig := cfg.Bitcoin
 	if registeredChains.PrimaryChain() == litecoinChain {
 		chainConfig = cfg.Litecoin
+	}
+	if registeredChains.PrimaryChain() == einsteiniumChain {
+		chainConfig = cfg.Einsteinium
 	}
 
 	// The macaroon files are passed to the wallet unlocker since they are
