@@ -1,7 +1,7 @@
 # Installation
 
 ### Preliminaries
-  In order to work with [`lnd`](https://github.com/lightningnetwork/lnd), the
+  In order to work with [`lnd`](https://github.com/emc2foundation/lnd), the
   following build dependencies are required:
 
   * **Go:** `lnd` is written in Go. To install, run one of the following commands:
@@ -64,8 +64,8 @@
 With the preliminary steps completed, to install `lnd`, `lncli`, and all
 related dependencies run the following commands:
 ```
-go get -d github.com/lightningnetwork/lnd
-cd $GOPATH/src/github.com/lightningnetwork/lnd
+go get -d github.com/emc2foundation/lnd
+cd $GOPATH/src/github.com/emc2foundation/lnd
 make && make install
 ```
 
@@ -91,7 +91,7 @@ go install -v ./...
 To update your version of `lnd` to the latest version run the following
 commands:
 ```
-cd $GOPATH/src/github.com/lightningnetwork/lnd
+cd $GOPATH/src/github.com/emc2foundation/lnd
 git pull
 make && make install
 ```
@@ -101,7 +101,7 @@ On FreeBSD, use gmake instead of make.
 Alternatively, if one doesn't wish to use `make`, then the `go` commands can be
 used directly:
 ```
-cd $GOPATH/src/github.com/lightningnetwork/lnd
+cd $GOPATH/src/github.com/emc2foundation/lnd
 git pull
 dep ensure -v
 go install -v ./...
@@ -302,7 +302,7 @@ reachable IP address.
 # Creating an lnd.conf (Optional)
 
 Optionally, if you'd like to have a persistent configuration between `lnd`
-launches, allowing you to simply type `lnd --bitcoin.testnet --bitcoin.active`
+launches, allowing you to simply type `lnd --einsteinium.testnet --einsteinium.active`
 at the command line, you can create an `lnd.conf`.
 
 **On MacOS, located at:**
@@ -311,20 +311,27 @@ at the command line, you can create an `lnd.conf`.
 **On Linux, located at:**
 `~/.lnd/lnd.conf`
 
-Here's a sample `lnd.conf` for `btcd` to get you started:
+Here's a sample `lnd.conf` for `einsteiniumd` to get you started:
 ```
 [Application Options]
 debuglevel=trace
 debughtlc=true
 maxpendingchannels=10
 
-[Bitcoin]
-bitcoin.active=1
+[Einsteinium]
+einsteinium.active = 1
+einsteinium.mainnet =1
+einsteinium.node=einsteiniumd
+
+[einsteiniumd]
+einsteiniumd.rpcuser=<User>
+einsteiniumd.rpcpass=<Pass>
+einsteiniumd.zmqpath=tcp://127.0.0.1:28332
 ```
 
-Notice the `[Bitcoin]` section. This section houses the parameters for the
-Bitcoin chain. `lnd` also supports Litecoin testnet4 (but not both BTC and LTC
-at the same time), so when working with Litecoin be sure to set to parameters
-for Litecoin accordingly. For node configuration, the sections are called
-`[Btcd]`, `[Bitcoind]`, `[Neutrino]`, `[Ltcd]`, and `[Litecoind]` depending on
+Notice the `[Einsteinium]` section. This section houses the parameters for the
+Einsteinium chain. `lnd` also supports Bitcoin and Litecoin testnet4 (but not both BTC, LTC and EMC2
+at the same time), so when working with Einsteinium be sure to set to parameters
+for Einsteinium accordingly. For node configuration, the sections are called
+`[Btcd]`, `[Bitcoind]`, `[Neutrino]`, `[Ltcd]`, `[Litecoind]` and `[einsteiniumd]` depending on
 which chain and node type you're using.
