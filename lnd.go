@@ -413,8 +413,8 @@ func lndMain() error {
 			// If not we return a value scaled linearly
 			// between 3 and 6, depending on channel size.
 			// TODO(halseth): Use 1 as minimum?
-			minConf := uint64(3)
-			maxConf := uint64(6)
+			minConf := uint64(30)
+			maxConf := uint64(60)
 			maxChannelSize := uint64(
 				lnwire.NewMSatFromSatoshis(maxFundingAmount))
 			stake := lnwire.NewMSatFromSatoshis(chanAmt) + pushAmt

@@ -383,7 +383,7 @@ search:
 			// keys of nodes. We use the lndLookupSRV function for
 			// this task.
 			primarySeed := dnsSeedTuple[0]
-			_, addrs, err := d.net.LookupSRV("nodes", "tcp", primarySeed)
+			_, addrs, err := d.net.LookupSRV("", "", primarySeed)
 			if err != nil {
 				log.Tracef("Unable to lookup SRV records via "+
 					"primary seed: %v", err)

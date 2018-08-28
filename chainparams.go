@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/matijamitic/lnd/keychain"
+	"github.com/emc2foundation/lnd/keychain"
 	litecoinCfg "github.com/ltcsuite/ltcd/chaincfg"
-	einsteiniumCfg "github.com/MatijaMitic/emc2d-chainconfig"
+	einsteiniumCfg "github.com/emc2foundation/emc2d-chainconfig"
 	litecoinWire "github.com/ltcsuite/ltcd/wire"
 	"github.com/btcsuite/btcd/chaincfg"
 	bitcoinCfg "github.com/btcsuite/btcd/chaincfg"

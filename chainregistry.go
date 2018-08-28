@@ -691,6 +691,13 @@ var (
 				"soa.nodes.lightning.directory",
 			},
 		},
+
+		einsteiniumMainnetGenesis: {
+			{
+				"emc2lseeder.emc2.foundation",
+				"",
+			},
+		},
 	}
 )
 

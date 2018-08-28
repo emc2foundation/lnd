@@ -43,7 +43,7 @@ import (
 const (
 	// defaultMinPeers is the minimum number of peers nodes should always be
 	// connected to.
-	defaultMinPeers = 3
+	defaultMinPeers = 2
 
 	// defaultBackoff is the starting point for exponential backoff for
 	// reconnecting to persistent peers.
